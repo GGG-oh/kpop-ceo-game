@@ -290,6 +290,8 @@ function resolveAction(player, action, trend) {
       facts.push(`최종 활동 점수는 약 ${Math.round(performance)}점으로 집계되었습니다.`);
 
       // ===== 병크 시스템: 멤버 멘탈 평균이 낮을수록, 활동을 많이 할수록 위험 =====
+      // 여기서는 병크 발생 여부와 "원본" 페널티만 계산해서 리턴한다.
+      // 실제 페널티 반영은 플레이어가 대응(사과/법적대응/휴식/무대강행)을 고른 뒤 별도로 처리된다.
       const mentalScore = groupMentalScore(group, player.trainees || []);
       let scandalChance = 20 - (mentalScore - 60) * 0.4; // 멘탈 평균 60 기준 20%
       scandalChance = Math.max(5, Math.min(45, scandalChance));
@@ -297,11 +299,9 @@ function resolveAction(player, action, trend) {
         const type_ = SCANDAL_TYPES[randInt(0, SCANDAL_TYPES.length - 1)];
         const repPenalty = randInt(type_.reputationPenalty[0], type_.reputationPenalty[1]);
         const fandomPenalty = randInt(type_.fandomPenalty[0], type_.fandomPenalty[1]);
-        delta.reputation -= repPenalty;
-        delta.fandom -= fandomPenalty;
         scandal = { label: type_.label, reputationPenalty: repPenalty, fandomPenalty };
         facts.push(
-          `활동 도중 "${type_.label}"이(가) 발생하여 평판 -${repPenalty}, 팬덤 -${fandomPenalty}의 타격을 입었습니다. (멤버 평균 멘탈 등급이 낮을수록 이런 위험이 커집니다)`
+          `활동 도중 "${type_.label}"이(가) 발생했습니다. CEO의 대응에 따라 피해 규모가 달라집니다.`
         );
       }
       break;
@@ -374,6 +374,80 @@ function computeYearEndAwards(players) {
   return awards;
 }
 
+/**
+ * 병크 발생 후 플레이어의 대응(response)에 따라 최종 페널티를 재계산한다.
+ * scandal: { label, reputationPenalty, fandomPenalty } (comeback에서 발생한 원본 병크)
+ * responseType: 'apology' | 'legal' | 'suspend' | 'push'
+ */
+function resolveScandalResponse(scandal, responseType) {
+  const base = { reputationPenalty: scandal.reputationPenalty, fandomPenalty: scandal.fandomPenalty };
+
+  switch (responseType) {
+    case "apology": {
+      const rep = Math.round(base.reputationPenalty * 0.5);
+      const fandom = base.fandomPenalty;
+      return {
+        reputationPenalty: rep,
+        fandomPenalty: fandom,
+        moneyDelta: 0,
+        note: `진정성 있는 사과 발표로 평판 타격은 줄었지만, 팬덤 이탈까지는 막지 못했습니다. (평판 -${rep}, 팬덤 -${fandom})`,
+      };
+    }
+    case "legal": {
+      const success = Math.random() < 0.5;
+      const money = -5;
+      if (success) {
+        const fandom = Math.round(base.fandomPenalty * 0.4);
+        return {
+          reputationPenalty: base.reputationPenalty,
+          fandomPenalty: fandom,
+          moneyDelta: money,
+          note: `단호한 법적 대응이 논란을 빠르게 잠재웠습니다. (평판 -${base.reputationPenalty}, 팬덤 -${fandom}, 대응 비용 -5)`,
+        };
+      }
+      const rep = Math.round(base.reputationPenalty * 1.5);
+      return {
+        reputationPenalty: rep,
+        fandomPenalty: base.fandomPenalty,
+        moneyDelta: money,
+        note: `지나치게 강경한 태도라는 역풍이 불며 오히려 평판 타격이 커졌습니다. (평판 -${rep}, 팬덤 -${base.fandomPenalty}, 대응 비용 -5)`,
+      };
+    }
+    case "suspend": {
+      const rep = Math.round(base.reputationPenalty * 0.2);
+      const fandom = Math.round(base.fandomPenalty * 1.3);
+      return {
+        reputationPenalty: rep,
+        fandomPenalty: fandom,
+        moneyDelta: -10,
+        note: `활동을 전면 중단하고 자숙에 들어가 평판은 지켰지만, 공백기 동안 팬덤 이탈이 커졌습니다. (평판 -${rep}, 팬덤 -${fandom}, 손실 -10)`,
+      };
+    }
+    case "push":
+    default: {
+      const lucky = Math.random() < 0.3;
+      if (lucky) {
+        const rep = Math.round(base.reputationPenalty * 0.8);
+        const fandom = Math.round(base.fandomPenalty * 0.8);
+        return {
+          reputationPenalty: rep,
+          fandomPenalty: fandom,
+          moneyDelta: 0,
+          note: `무대를 강행했지만, 프로다운 모습에 오히려 팬들이 감동했습니다. (평판 -${rep}, 팬덤 -${fandom})`,
+        };
+      }
+      const rep = Math.round(base.reputationPenalty * 1.2);
+      const fandom = Math.round(base.fandomPenalty * 1.2);
+      return {
+        reputationPenalty: rep,
+        fandomPenalty: fandom,
+        moneyDelta: 0,
+        note: `무리한 강행이 논란을 더 키웠습니다. (평판 -${rep}, 팬덤 -${fandom})`,
+      };
+    }
+  }
+}
+
 module.exports = {
   CONCEPTS,
   TREND_POOL,
@@ -382,6 +456,7 @@ module.exports = {
   generateComposer,
   pickTrend,
   resolveAction,
+  resolveScandalResponse,
   traineeAvgScore,
   groupAvgScore,
   generateRoomCode,
