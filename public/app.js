@@ -72,16 +72,14 @@ async function leaveRoom() {
     : "방에서 나가시겠습니까?";
   if (!confirm(msg)) return;
 
-  try {
-    if (currentRoomId && myId) {
-      await fetch(`${API}/api/rooms/${currentRoomId}/leave`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ playerId: myId }),
-      });
-    }
-  } catch (err) {
-    console.error(err);
+  // 서버에 퇴장을 알리는 요청은 기다리지 않고 백그라운드로 보낸다.
+  // (Render 서버가 잠들어 있으면 응답이 수십 초 걸릴 수 있어서, 화면 이동을 막으면 안 됨)
+  if (currentRoomId && myId) {
+    fetch(`${API}/api/rooms/${currentRoomId}/leave`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerId: myId }),
+    }).catch((err) => console.error("퇴장 알림 실패(무시 가능):", err));
   }
 
   localStorage.removeItem("kceo_playerId");
@@ -91,6 +89,9 @@ async function leaveRoom() {
 
 document.getElementById("btn-home-waiting").addEventListener("click", leaveRoom);
 document.getElementById("btn-home-game").addEventListener("click", leaveRoom);
+
+// ===== Render 무료 서버는 안 쓰면 잠들기 때문에, 페이지 열리자마자 미리 깨워둠 =====
+fetch(`${API}/api/rooms/__wake__`).catch(() => {});
 
 // ===== 화면 전환 =====
 function showScreen(id) {
