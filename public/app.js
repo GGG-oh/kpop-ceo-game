@@ -160,6 +160,7 @@ joinBtn.addEventListener("click", async () => {
 
   setupPresence();
   joinBtn.disabled = true;
+  showScreen("screen-waiting");
 });
 
 function setupPresence() {
