@@ -1,7 +1,7 @@
 const fetch = require("node-fetch");
 
 const NVIDIA_URL = "https://integrate.api.nvidia.com/v1/chat/completions";
-const AI_TIMEOUT_MS = 25000; // 25초 넘게 응답 없으면 포기하고 기본 텍스트로 대체
+const AI_TIMEOUT_MS = 60000; // 60초 넘게 응답 없으면 포기하고 기본 텍스트로 대체
 
 /**
  * NVIDIA NIM (OpenAI 호환) 챗 컴플리션 호출.
