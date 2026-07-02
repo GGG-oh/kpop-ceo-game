@@ -10,6 +10,7 @@ const {
   pickTrend,
   resolveAction,
   generateRoomCode,
+  computeYearEndAwards,
 } = require("./gameLogic");
 const { generateTurnNarrative, generateEndingSummaries } = require("./ai");
 
@@ -112,6 +113,7 @@ app.post("/api/rooms/:roomId/start-game", async (req, res) => {
       batch.update(doc.ref, {
         trainees: starterTrainees,
         groups: [],
+        composers: [],
         money: 100,
         reputation: 50,
         fandom: 0,
@@ -196,8 +198,29 @@ async function processTurn(roomId) {
   const players = playersSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
   const perPlayer = players.map((player) => {
-    const { delta, facts } = resolveAction(player, player.currentAction, trend);
-    return { playerId: player.id, companyName: player.companyName, action: player.currentAction, delta, facts };
+    const {
+      delta,
+      facts,
+      newTrainee,
+      traineeUpdate,
+      newComposer,
+      composerUsedId,
+      groupPopularityUpdate,
+      scandal,
+    } = resolveAction(player, player.currentAction, trend);
+    return {
+      playerId: player.id,
+      companyName: player.companyName,
+      action: player.currentAction,
+      delta,
+      facts,
+      newTrainee,
+      traineeUpdate,
+      newComposer,
+      composerUsedId,
+      groupPopularityUpdate,
+      scandal,
+    };
   });
 
   let narrative;
@@ -218,6 +241,24 @@ async function processTurn(roomId) {
     const playerRef = playersRef.doc(p.playerId);
     const player = players.find((pl) => pl.id === p.playerId);
 
+    let newTrainees = player.trainees || [];
+    if (p.newTrainee) {
+      newTrainees = [...newTrainees, p.newTrainee];
+    }
+    if (p.traineeUpdate) {
+      newTrainees = newTrainees.map((t) =>
+        t.id === p.traineeUpdate.id ? { ...t, [p.traineeUpdate.field]: p.traineeUpdate.newGrade } : t
+      );
+    }
+
+    let newComposers = player.composers || [];
+    if (p.newComposer) {
+      newComposers = [...newComposers, p.newComposer];
+    }
+    if (p.composerUsedId) {
+      newComposers = newComposers.map((c) => (c.id === p.composerUsedId ? { ...c, used: true } : c));
+    }
+
     let newGroups = player.groups || [];
     if (p.action?.type === "form_group" && p.action.groupName && Array.isArray(p.action.memberIds)) {
       newGroups = [
@@ -232,11 +273,20 @@ async function processTurn(roomId) {
         },
       ];
     }
+    if (p.groupPopularityUpdate) {
+      newGroups = newGroups.map((g) =>
+        g.id === p.groupPopularityUpdate.groupId
+          ? { ...g, popularity: Math.max(0, (g.popularity || 0) + p.groupPopularityUpdate.delta) }
+          : g
+      );
+    }
 
     batch.update(playerRef, {
       money: admin.firestore.FieldValue.increment(p.delta.money || 0),
       reputation: admin.firestore.FieldValue.increment(p.delta.reputation || 0),
       fandom: admin.firestore.FieldValue.increment(p.delta.fandom || 0),
+      trainees: newTrainees,
+      composers: newComposers,
       groups: newGroups,
       currentAction: null,
       actionSubmitted: false,
@@ -256,9 +306,11 @@ async function processTurn(roomId) {
     const finalPlayersSnap = await playersRef.get();
     const finalPlayers = finalPlayersSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
+    const awards = computeYearEndAwards(finalPlayers);
+
     let endings = {};
     try {
-      endings = await generateEndingSummaries({ players: finalPlayers });
+      endings = await generateEndingSummaries({ players: finalPlayers, awards });
     } catch (err) {
       console.error("[processTurn] 엔딩 생성 실패:", err.message);
     }
@@ -271,7 +323,7 @@ async function processTurn(roomId) {
     });
     await batch2.commit();
 
-    await stateRef.update({ phase: "ended" });
+    await stateRef.update({ phase: "ended", yearEndAwards: awards });
   } else {
     await stateRef.update({
       phase: "playing",
