@@ -9,7 +9,8 @@ const ACTIONS = {
   scout: { label: "연습생 모집", desc: "새로운 연습생을 발굴합니다.", cost: "💰 5" },
   train: { label: "연습생 트레이닝", desc: "선택한 연습생의 실력을 키웁니다.", cost: "💰 3", needsTraineeTarget: true },
   form_group: { label: "그룹 결성", desc: "연습생들을 모아 새 그룹을 만듭니다.", cost: "💰 10", needsGroupForm: true },
-  comeback: { label: "컴백/데뷔", desc: "그룹의 신곡을 발매하고 활동합니다.", cost: "💰 15", needsGroupTarget: true },
+  sign_composer: { label: "작곡가 계약", desc: "유명(고비용·안정) 또는 신인(저비용·도박) 작곡가를 계약합니다.", cost: "💰 8~30", needsComposerTier: true },
+  comeback: { label: "컴백/데뷔", desc: "그룹의 신곡을 발매하고 활동합니다. 작곡가를 함께 쓸 수 있어요.", cost: "💰 15", needsGroupTarget: true, optionalComposerTarget: true },
   marketing: { label: "마케팅", desc: "SNS, 광고 등으로 그룹을 홍보합니다.", cost: "💰 8", needsGroupTarget: true },
   rest: { label: "휴식 제공", desc: "리스크를 낮추고 안정을 꾀합니다.", cost: "무료" },
   invest: { label: "시설 투자", desc: "장기적인 평판 기반을 다집니다.", cost: "💰 20" },
@@ -62,6 +63,34 @@ function setRoom(roomId) {
   document.getElementById("room-code-text").textContent = roomId;
   document.getElementById("join-room-badge").textContent = "ROOM " + roomId;
 }
+
+// ===== 홈으로 가기 (방 나가기) =====
+async function leaveRoom() {
+  const inGame = latestState.phase === "playing" || latestState.phase === "calculating" || latestState.phase === "scandal_response";
+  const msg = inGame
+    ? "게임이 진행 중입니다. 지금 나가면 다른 플레이어들이 다음 턴을 진행할 수 없게 됩니다. 그래도 홈으로 나가시겠습니까?"
+    : "방에서 나가시겠습니까?";
+  if (!confirm(msg)) return;
+
+  try {
+    if (currentRoomId && myId) {
+      await fetch(`${API}/api/rooms/${currentRoomId}/leave`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ playerId: myId }),
+      });
+    }
+  } catch (err) {
+    console.error(err);
+  }
+
+  localStorage.removeItem("kceo_playerId");
+  localStorage.removeItem("kceo_roomId");
+  window.location.href = window.location.pathname;
+}
+
+document.getElementById("btn-home-waiting").addEventListener("click", leaveRoom);
+document.getElementById("btn-home-game").addEventListener("click", leaveRoom);
 
 // ===== 화면 전환 =====
 function showScreen(id) {
@@ -188,7 +217,7 @@ function onStateChange(snap) {
   latestState = snap.data();
   render();
 
-  if (latestState.phase === "playing" || latestState.phase === "calculating") {
+  if (latestState.phase === "playing" || latestState.phase === "calculating" || latestState.phase === "scandal_response") {
     showScreen("screen-game");
   } else if (latestState.phase === "ended") {
     showScreen("screen-ending");
@@ -200,6 +229,91 @@ function onStateChange(snap) {
   }
 
   document.getElementById("loading-overlay").classList.toggle("hidden", latestState.phase !== "calculating");
+  renderScandalOverlay();
+}
+
+// ===== 병크 대응 오버레이 =====
+const SCANDAL_RESPONSES = [
+  { type: "apology", label: "사과 발표", desc: "진정성 있게 사과합니다. 평판 타격은 줄지만 팬덤 이탈은 못 막아요." },
+  { type: "legal", label: "법적 대응", desc: "단호하게 대응합니다. 성공하면 효과적이지만, 역풍이 불 수도 있어요." },
+  { type: "suspend", label: "활동 중단", desc: "전면 자숙합니다. 평판은 지키지만 활동 공백에 비용도 듭니다." },
+  { type: "push", label: "무대 강행", desc: "그대로 밀어붙입니다. 도박이지만 가끔 통하기도 해요." },
+];
+
+function renderScandalOverlay() {
+  const overlay = document.getElementById("scandal-overlay");
+  if (latestState.phase !== "scandal_response") {
+    overlay.classList.add("hidden");
+    return;
+  }
+
+  const pending = latestState.pendingScandals || [];
+  const mine = pending.find((p) => p.playerId === myId);
+
+  if (!mine) {
+    // 내 병크는 없지만 다른 회사가 대응 중 → 로딩 오버레이로 안내
+    const loadingOverlay = document.getElementById("loading-overlay");
+    const waitingNames = pending.filter((p) => !p.resolved).map((p) => p.companyName).join(", ");
+    document.getElementById("loading-text").textContent = waitingNames
+      ? `${waitingNames}에서 병크 대응 중...`
+      : "병크 대응 처리 중...";
+    loadingOverlay.classList.remove("hidden");
+    overlay.classList.add("hidden");
+    return;
+  }
+
+  document.getElementById("loading-overlay").classList.add("hidden");
+
+  if (mine.resolved) {
+    // 내 대응은 끝났지만 다른 사람 대응 대기 중
+    overlay.classList.add("hidden");
+    const loadingOverlay = document.getElementById("loading-overlay");
+    document.getElementById("loading-text").textContent = "다른 회사의 병크 대응을 기다리는 중...";
+    loadingOverlay.classList.remove("hidden");
+    return;
+  }
+
+  overlay.classList.remove("hidden");
+  document.getElementById("scandal-title").textContent = mine.scandal.label;
+  document.getElementById("scandal-desc").textContent = "어떻게 대응하시겠습니까?";
+
+  const optionsWrap = document.getElementById("scandal-options");
+  const outcomeWrap = document.getElementById("scandal-outcome");
+  outcomeWrap.classList.add("hidden");
+  optionsWrap.classList.remove("hidden");
+  optionsWrap.querySelectorAll(".scandal-option-btn").forEach((b) => (b.disabled = false));
+
+  if (!optionsWrap.dataset.rendered) {
+    optionsWrap.innerHTML = SCANDAL_RESPONSES.map((r) => `
+      <button class="scandal-option-btn" data-type="${r.type}">
+        ${r.label}
+        <div class="opt-desc">${r.desc}</div>
+      </button>
+    `).join("");
+    optionsWrap.dataset.rendered = "1";
+
+    optionsWrap.querySelectorAll(".scandal-option-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        optionsWrap.querySelectorAll(".scandal-option-btn").forEach((b) => (b.disabled = true));
+        try {
+          const res = await fetch(`${API}/api/rooms/${currentRoomId}/respond-scandal`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ playerId: myId, responseType: btn.dataset.type }),
+          });
+          const data = await res.json();
+          if (data.ok) {
+            optionsWrap.classList.add("hidden");
+            outcomeWrap.textContent = data.outcome.note;
+            outcomeWrap.classList.remove("hidden");
+          }
+        } catch (err) {
+          console.error(err);
+          optionsWrap.querySelectorAll(".scandal-option-btn").forEach((b) => (b.disabled = false));
+        }
+      });
+    });
+  }
 }
 
 function onPlayersChange(snap) {
@@ -237,7 +351,7 @@ function onHistoryChange(snap) {
 // ===== 렌더 총괄 =====
 function render() {
   renderWaitingSlots();
-  if (latestState.phase === "playing" || latestState.phase === "calculating") {
+  if (latestState.phase === "playing" || latestState.phase === "calculating" || latestState.phase === "scandal_response") {
     renderTopbar();
     renderRivals();
     renderAssets();
@@ -309,6 +423,17 @@ function renderAssets() {
       <div class="g-concept">${g.concept} · 인기 ${g.popularity ?? 0}</div>
     </div>
   `).join("") || `<p class="hint">아직 그룹이 없습니다.</p>`;
+
+  const composerWrap = document.getElementById("composer-list");
+  if (composerWrap) {
+    const composers = (me.composers || []).filter((c) => !c.used);
+    composerWrap.innerHTML = composers.map((c) => `
+      <div class="group-card">
+        <div class="g-name">${c.name} ${c.tier === "famous" ? "⭐" : "🎲"}</div>
+        <div class="g-concept">${c.tier === "famous" ? "유명 작곡가" : "신인 작곡가"} · 다음 컴백에 사용 가능</div>
+      </div>
+    `).join("") || `<p class="hint">계약된 작곡가가 없습니다.</p>`;
+  }
 }
 
 // ===== 행동 선택 패널 =====
@@ -321,7 +446,7 @@ function renderActionPanel() {
   const submitBtn = document.getElementById("btn-submit-action");
   const waitingHint = document.getElementById("waiting-others");
 
-  if (alreadySubmitted || latestState.phase === "calculating") {
+  if (alreadySubmitted || latestState.phase === "calculating" || latestState.phase === "scandal_response") {
     panel.querySelectorAll(".action-card, .action-target-area input, .action-target-area select").forEach((el) => (el.style.pointerEvents = "none"));
     submitBtn.classList.add("hidden");
     waitingHint.classList.remove("hidden");
@@ -367,11 +492,30 @@ function renderActionTargetArea(type) {
     if (!(me.trainees || []).length) submitBtn.disabled = true;
     document.getElementById("target-trainee")?.addEventListener("change", updateSelectedFromInputs);
     updateSelectedFromInputs();
+  } else if (meta.needsComposerTier) {
+    area.innerHTML = `
+      <select id="target-composer-tier">
+        <option value="famous">유명 작곡가 (💰30 · 고품질·안정)</option>
+        <option value="rookie">신인 작곡가 (💰8 · 저비용·도박)</option>
+      </select>
+    `;
+    document.getElementById("target-composer-tier")?.addEventListener("change", updateSelectedFromInputs);
+    updateSelectedFromInputs();
   } else if (meta.needsGroupTarget) {
     const options = (me.groups || []).map((g) => `<option value="${g.id}">${g.name}</option>`).join("");
-    area.innerHTML = `<select id="target-group">${options || "<option disabled>그룹이 없습니다</option>"}</select>`;
+    let html = `<select id="target-group">${options || "<option disabled>그룹이 없습니다</option>"}</select>`;
+    if (meta.optionalComposerTarget) {
+      const availableComposers = (me.composers || []).filter((c) => !c.used);
+      const composerOptions = availableComposers.map((c) => `<option value="${c.id}">${c.name} (${c.tier === "famous" ? "유명" : "신인"})</option>`).join("");
+      html += `<select id="target-composer">
+        <option value="">작곡가 없이 진행</option>
+        ${composerOptions}
+      </select>`;
+    }
+    area.innerHTML = html;
     if (!(me.groups || []).length) submitBtn.disabled = true;
     document.getElementById("target-group")?.addEventListener("change", updateSelectedFromInputs);
+    document.getElementById("target-composer")?.addEventListener("change", updateSelectedFromInputs);
     updateSelectedFromInputs();
   } else if (meta.needsGroupForm) {
     const conceptOptions = CONCEPTS.map((c) => `<option value="${c}">${c}</option>`).join("");
@@ -403,9 +547,16 @@ function updateSelectedFromInputs() {
   if (meta.needsTraineeTarget) {
     const el = document.getElementById("target-trainee");
     selectedAction.targetTraineeId = el?.value;
+  } else if (meta.needsComposerTier) {
+    const el = document.getElementById("target-composer-tier");
+    selectedAction.tier = el?.value || "rookie";
   } else if (meta.needsGroupTarget) {
     const el = document.getElementById("target-group");
     selectedAction.targetGroupId = el?.value;
+    if (meta.optionalComposerTarget) {
+      const composerEl = document.getElementById("target-composer");
+      selectedAction.composerId = composerEl?.value || null;
+    }
   } else if (meta.needsGroupForm) {
     const name = document.getElementById("target-groupname")?.value.trim();
     const concept = document.getElementById("target-concept")?.value;
@@ -439,6 +590,20 @@ document.getElementById("btn-submit-action").addEventListener("click", async () 
 async function renderEndingScreen() {
   const snap = await PLAYERS_REF.get();
   const players = snap.docs.map((d) => d.data());
+
+  const awards = latestState.yearEndAwards;
+  const awardsWrap = document.getElementById("awards-section");
+  if (awards && Object.keys(awards).length) {
+    awardsWrap.innerHTML = Object.entries(awards).map(([title, winner]) => `
+      <div class="award-card">
+        <div class="award-title">🏆 ${title}</div>
+        <div class="award-winner">${winner}</div>
+      </div>
+    `).join("");
+  } else {
+    awardsWrap.innerHTML = "";
+  }
+
   const wrap = document.getElementById("ending-cards");
   wrap.innerHTML = players.map((p) => `
     <div class="ending-card">
