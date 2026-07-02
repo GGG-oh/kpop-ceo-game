@@ -9,6 +9,7 @@ const {
   generateTrainee,
   pickTrend,
   resolveAction,
+  resolveScandalResponse,
   generateRoomCode,
   computeYearEndAwards,
 } = require("./gameLogic");
@@ -185,6 +186,59 @@ app.post("/api/rooms/:roomId/submit-action", async (req, res) => {
   }
 });
 
+// ===== 병크 대응 제출 =====
+app.post("/api/rooms/:roomId/respond-scandal", async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const { playerId, responseType } = req.body;
+    if (!playerId || !["apology", "legal", "suspend", "push"].includes(responseType)) {
+      return res.status(400).json({ ok: false, error: "playerId와 올바른 responseType이 필요합니다." });
+    }
+
+    const { stateRef, playersRef } = roomRefs(roomId);
+
+    const result = await db.runTransaction(async (tx) => {
+      const stateDoc = await tx.get(stateRef);
+      const state = stateDoc.data();
+      if (state.phase !== "scandal_response") return { error: "지금은 병크 대응 단계가 아닙니다." };
+
+      const pending = state.pendingScandals || [];
+      const idx = pending.findIndex((p) => p.playerId === playerId && !p.resolved);
+      if (idx === -1) return { error: "대응할 병크가 없습니다." };
+
+      const outcome = resolveScandalResponse(pending[idx].scandal, responseType);
+      pending[idx] = { ...pending[idx], resolved: true, responseType, outcome };
+
+      tx.update(stateRef, { pendingScandals: pending });
+
+      const playerRef = playersRef.doc(playerId);
+      tx.update(playerRef, {
+        reputation: admin.firestore.FieldValue.increment(-outcome.reputationPenalty),
+        fandom: admin.firestore.FieldValue.increment(-outcome.fandomPenalty),
+        money: admin.firestore.FieldValue.increment(outcome.moneyDelta || 0),
+      });
+
+      const allResolved = pending.every((p) => p.resolved);
+      return { ok: true, outcome, allResolved, turn: state.currentTurn, totalTurns: state.totalTurns };
+    });
+
+    if (result.error) {
+      return res.status(400).json({ ok: false, error: result.error });
+    }
+
+    res.json({ ok: true, outcome: result.outcome });
+
+    if (result.allResolved) {
+      advanceOrEnd(roomId, result.turn, result.totalTurns).catch((err) => {
+        console.error("[advanceOrEnd] 실패:", err);
+      });
+    }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 // ===== 턴 계산 (내부 함수) =====
 async function processTurn(roomId) {
   const { stateRef, playersRef, historyRef } = roomRefs(roomId);
@@ -193,6 +247,7 @@ async function processTurn(roomId) {
   const state = stateSnap.data();
   const trend = state.currentTrend;
   const turn = state.currentTurn;
+  const totalTurns = state.totalTurns || TOTAL_TURNS;
 
   const playersSnap = await playersRef.get();
   const players = playersSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
@@ -281,6 +336,7 @@ async function processTurn(roomId) {
       );
     }
 
+    // 병크 페널티는 여기서 반영하지 않는다 (대응 선택 후 별도 반영됨)
     batch.update(playerRef, {
       money: admin.firestore.FieldValue.increment(p.delta.money || 0),
       reputation: admin.firestore.FieldValue.increment(p.delta.reputation || 0),
@@ -302,7 +358,27 @@ async function processTurn(roomId) {
     results: Object.fromEntries(perPlayer.map((p) => [p.playerId, { delta: p.delta, facts: p.facts }])),
   });
 
-  if (turn >= (state.totalTurns || TOTAL_TURNS)) {
+  const scandalPlayers = perPlayer.filter((p) => p.scandal);
+
+  if (scandalPlayers.length > 0) {
+    const pendingScandals = scandalPlayers.map((p) => ({
+      playerId: p.playerId,
+      companyName: p.companyName,
+      scandal: p.scandal,
+      resolved: false,
+    }));
+    await stateRef.update({ phase: "scandal_response", pendingScandals });
+    return;
+  }
+
+  await advanceOrEnd(roomId, turn, totalTurns);
+}
+
+// ===== 턴 진행 마무리: 다음 턴으로 넘어가거나 게임 종료 처리 =====
+async function advanceOrEnd(roomId, turn, totalTurns) {
+  const { stateRef, playersRef } = roomRefs(roomId);
+
+  if (turn >= totalTurns) {
     const finalPlayersSnap = await playersRef.get();
     const finalPlayers = finalPlayersSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
@@ -312,7 +388,7 @@ async function processTurn(roomId) {
     try {
       endings = await generateEndingSummaries({ players: finalPlayers, awards });
     } catch (err) {
-      console.error("[processTurn] 엔딩 생성 실패:", err.message);
+      console.error("[advanceOrEnd] 엔딩 생성 실패:", err.message);
     }
 
     const batch2 = db.batch();
@@ -323,15 +399,33 @@ async function processTurn(roomId) {
     });
     await batch2.commit();
 
-    await stateRef.update({ phase: "ended", yearEndAwards: awards });
+    await stateRef.update({ phase: "ended", yearEndAwards: awards, pendingScandals: [] });
   } else {
     await stateRef.update({
       phase: "playing",
       currentTurn: turn + 1,
       currentTrend: pickTrend(),
+      pendingScandals: [],
     });
   }
 }
+
+// ===== 방 나가기 (플레이어가 스스로 퇴장) =====
+app.post("/api/rooms/:roomId/leave", async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const { playerId } = req.body;
+    if (!playerId) {
+      return res.status(400).json({ ok: false, error: "playerId가 필요합니다." });
+    }
+    const { playersRef } = roomRefs(roomId);
+    await playersRef.doc(playerId).delete();
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
 
 // ===== 방 삭제 (게임 끝난 뒤 정리용, 선택사항) =====
 app.post("/api/rooms/:roomId/delete", async (req, res) => {
