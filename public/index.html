@@ -61,6 +61,7 @@
     <div id="waiting-slots" class="waiting-slots"></div>
     <p class="hint">이 링크나 코드를 친구에게 공유하세요. 3명이 모이면 자동 시작됩니다.</p>
     <button id="btn-copy-link" class="btn-ghost">링크 복사</button>
+    <button id="btn-home-waiting" class="btn-ghost">🏠 홈으로 가기</button>
   </div>
 </section>
 
@@ -71,7 +72,10 @@
       <span class="turn-badge" id="turn-badge">TURN 1 / 12</span>
       <span class="trend-badge" id="trend-badge">트렌드 로딩중...</span>
     </div>
-    <div class="topbar-right" id="my-stats"></div>
+    <div class="topbar-right">
+      <span id="my-stats"></span>
+      <button id="btn-home-game" class="btn-ghost btn-small">🏠 홈</button>
+    </div>
   </header>
 
   <div class="dashboard">
@@ -94,6 +98,8 @@
       <div id="trainee-list" class="trainee-list"></div>
       <h4>보유 그룹</h4>
       <div id="group-list" class="group-list"></div>
+      <h4>계약 작곡가</h4>
+      <div id="composer-list" class="group-list"></div>
     </div>
   </div>
 </section>
@@ -106,11 +112,23 @@
   </div>
 </div>
 
+<!-- ===== 병크 대응 오버레이 ===== -->
+<div id="scandal-overlay" class="loading-overlay hidden">
+  <div class="scandal-box">
+    <p class="eyebrow" style="color: var(--pink);">🚨 병크 발생</p>
+    <h3 id="scandal-title">사건 발생</h3>
+    <p id="scandal-desc" class="hint" style="margin-bottom:20px;"></p>
+    <div id="scandal-options" class="scandal-options"></div>
+    <div id="scandal-outcome" class="hint hidden" style="margin-top:16px;"></div>
+  </div>
+</div>
+
 <!-- ===== 화면 4: 엔딩 ===== -->
 <section id="screen-ending" class="screen">
   <div class="ending-wrap">
     <p class="eyebrow">SEASON FINALE</p>
     <h2 class="title-lg">1년간의 기록</h2>
+    <div id="awards-section" class="awards-section"></div>
     <div id="ending-cards" class="ending-cards"></div>
     <button id="btn-new-game" class="btn-primary">새 게임 시작</button>
   </div>
