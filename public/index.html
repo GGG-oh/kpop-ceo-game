@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AI Entertainment CEO</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Pretendard:wght@400;500;600;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<div class="stage-glow"></div>
+
+<!-- ===== 화면 0: 랜딩 (방 만들기 / 코드로 입장) ===== -->
+<section id="screen-landing" class="screen active">
+  <div class="join-card">
+    <p class="eyebrow">AI ENTERTAINMENT CEO</p>
+    <h1 class="title-xl">당신의 엔터를<br/>세워보세요</h1>
+    <p class="sub">3명이 모이면 자동으로 시작됩니다 · 1년(12턴)</p>
+
+    <button id="btn-create-room" class="btn-primary">새 게임 만들기</button>
+
+    <div class="or-divider"><span>또는</span></div>
+
+    <div class="field">
+      <label>초대 코드로 입장</label>
+      <input id="input-room-code" type="text" placeholder="예) AB3XZ9" maxlength="6" style="text-transform:uppercase;" />
+    </div>
+    <button id="btn-join-room" class="btn-ghost" style="width:100%;">코드로 입장하기</button>
+    <p id="landing-error" class="error-text"></p>
+  </div>
+</section>
+
+<!-- ===== 화면 1: 이름/회사명 입력 ===== -->
+<section id="screen-join" class="screen">
+  <div class="join-card">
+    <p class="eyebrow" id="join-room-badge">ROOM ------</p>
+    <h1 class="title-lg">CEO 정보를 입력하세요</h1>
+
+    <div class="field">
+      <label>CEO 이름</label>
+      <input id="input-name" type="text" placeholder="예) 지우개" maxlength="12" />
+    </div>
+    <div class="field">
+      <label>엔터테인먼트 이름</label>
+      <input id="input-company" type="text" placeholder="예) STAR Entertainment" maxlength="20" />
+    </div>
+
+    <button id="btn-join" class="btn-primary">입장하기</button>
+    <p id="join-error" class="error-text"></p>
+  </div>
+</section>
+
+<!-- ===== 화면 2: 대기실 ===== -->
+<section id="screen-waiting" class="screen">
+  <div class="waiting-wrap">
+    <p class="eyebrow">WAITING ROOM</p>
+    <h2 class="title-lg">플레이어를 기다리는 중</h2>
+    <div class="room-code-display">방 코드: <b id="room-code-text">------</b></div>
+    <div id="waiting-slots" class="waiting-slots"></div>
+    <p class="hint">이 링크나 코드를 친구에게 공유하세요. 3명이 모이면 자동 시작됩니다.</p>
+    <button id="btn-copy-link" class="btn-ghost">링크 복사</button>
+  </div>
+</section>
+
+<!-- ===== 화면 3: 게임 대시보드 ===== -->
+<section id="screen-game" class="screen">
+  <header class="topbar">
+    <div class="topbar-left">
+      <span class="turn-badge" id="turn-badge">TURN 1 / 12</span>
+      <span class="trend-badge" id="trend-badge">트렌드 로딩중...</span>
+    </div>
+    <div class="topbar-right" id="my-stats"></div>
+  </header>
+
+  <div class="dashboard">
+    <div class="rivals" id="rivals-panel"></div>
+
+    <div class="main-panel">
+      <div id="news-feed" class="news-feed"></div>
+
+      <div class="action-panel" id="action-panel">
+        <h3 class="panel-title">이번 달, 무엇을 하시겠습니까?</h3>
+        <div id="action-list" class="action-list"></div>
+        <div id="action-target-area" class="action-target-area"></div>
+        <button id="btn-submit-action" class="btn-primary" disabled>이번 달 행동 확정</button>
+        <p id="waiting-others" class="hint hidden">다른 CEO들의 선택을 기다리는 중...</p>
+      </div>
+    </div>
+
+    <div class="assets-panel">
+      <h4>연습생</h4>
+      <div id="trainee-list" class="trainee-list"></div>
+      <h4>보유 그룹</h4>
+      <div id="group-list" class="group-list"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 로딩 오버레이 (AI 계산 중) ===== -->
+<div id="loading-overlay" class="loading-overlay hidden">
+  <div class="loading-box">
+    <div class="spinner"></div>
+    <p id="loading-text">이번 달 음원 차트 집계 중...</p>
+  </div>
+</div>
+
+<!-- ===== 화면 4: 엔딩 ===== -->
+<section id="screen-ending" class="screen">
+  <div class="ending-wrap">
+    <p class="eyebrow">SEASON FINALE</p>
+    <h2 class="title-lg">1년간의 기록</h2>
+    <div id="ending-cards" class="ending-cards"></div>
+    <button id="btn-new-game" class="btn-primary">새 게임 시작</button>
+  </div>
+</section>
+
+<script src="firebase-config.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

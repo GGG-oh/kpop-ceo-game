@@ -1,0 +1,28 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /rooms/{roomId} {
+
+      // 게임 상태(meta/state): 읽기만 허용, 쓰기는 서버(Admin SDK)만
+      match /meta/{docId} {
+        allow read: if true;
+        allow write: if false;
+      }
+
+      // 플레이어: 누구나 읽기 가능. 생성/갱신은 클라이언트에서도 가능 (MVP 단계, 추후 필드 단위 제한 권장)
+      match /players/{playerId} {
+        allow read: if true;
+        allow create: if true;
+        allow update: if true;
+        allow delete: if false;
+      }
+
+      // 턴 히스토리(뉴스/결과): 읽기 전용, 쓰기는 서버만
+      match /turnHistory/{turnId} {
+        allow read: if true;
+        allow write: if false;
+      }
+    }
+  }
+}

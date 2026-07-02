@@ -1,0 +1,17 @@
+{
+  "name": "kpop-ceo-game",
+  "version": "1.0.0",
+  "description": "3인 실시간 멀티플레이 엔터테인먼트 경영 시뮬레이션",
+  "main": "server/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server/index.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "firebase-admin": "^12.3.0",
+    "node-fetch": "^2.7.0",
+    "dotenv": "^16.4.5",
+    "cors": "^2.8.5"
+  }
+}
