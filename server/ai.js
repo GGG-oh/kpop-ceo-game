@@ -86,15 +86,20 @@ ${JSON.stringify(userPayload, null, 2)}
 
 /**
  * 게임 종료 시 각 회사의 "역사 요약 기사"를 생성.
+ * awards: computeYearEndAwards()의 결과 (선택)
  */
-async function generateEndingSummaries({ players }) {
+async function generateEndingSummaries({ players, awards }) {
   const system = `당신은 K-POP 엔터테인먼트 산업 전문 기자입니다.
 각 회사의 1년간 활동 데이터를 보고, 그 회사만의 서사가 담긴 결산 기사를 작성합니다.
+연말 시상식 수상 내역이 주어지면 자연스럽게 기사에 녹여주세요.
 반드시 순수 JSON만 출력하세요.`;
 
   const user = `다음은 게임에 참여한 3개 회사의 최종 데이터입니다:
 
 ${JSON.stringify(players, null, 2)}
+
+연말 시상식 결과:
+${JSON.stringify(awards || {}, null, 2)}
 
 각 회사마다 5~7문장 분량의 "1년 결산 기사"를 작성하세요. 회사마다 서로 다른 개성과 서사를 담아주세요.
 
