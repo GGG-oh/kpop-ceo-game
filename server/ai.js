@@ -1,28 +1,43 @@
 const fetch = require("node-fetch");
 
 const NVIDIA_URL = "https://integrate.api.nvidia.com/v1/chat/completions";
+const AI_TIMEOUT_MS = 25000; // 25초 넘게 응답 없으면 포기하고 기본 텍스트로 대체
 
 /**
  * NVIDIA NIM (OpenAI 호환) 챗 컴플리션 호출.
  * responseIsJson=true면 JSON.parse까지 시도해서 리턴.
  */
 async function callAI(systemPrompt, userPrompt, { responseIsJson = false, temperature = 0.9 } = {}) {
-  const res = await fetch(NVIDIA_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${process.env.NVIDIA_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: process.env.NVIDIA_MODEL || "meta/llama-3.3-70b-instruct",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      temperature,
-      max_tokens: 1200,
-    }),
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
+
+  let res;
+  try {
+    res = await fetch(NVIDIA_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.NVIDIA_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: process.env.NVIDIA_MODEL || "meta/llama-3.3-70b-instruct",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        temperature,
+        max_tokens: 1200,
+      }),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if (err.name === "AbortError") {
+      throw new Error(`NVIDIA API 응답이 ${AI_TIMEOUT_MS / 1000}초 안에 오지 않아 타임아웃되었습니다.`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   if (!res.ok) {
     const errText = await res.text();
