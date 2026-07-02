@@ -125,6 +125,7 @@ html, body {
   font-family: var(--font-body);
 }
 .btn-ghost:hover { border-color: var(--cyan); color: var(--cyan); }
+.btn-small { padding: 6px 12px; font-size: 12px; margin-left: 10px; }
 
 .error-text { color: var(--pink); font-size: 12px; margin-top: 10px; min-height: 14px; }
 
@@ -206,6 +207,7 @@ html, body {
 }
 .turn-badge { background: var(--pink); color: #0a0a12; }
 .trend-badge { background: var(--bg-elev-2); border: 1px solid var(--border); color: var(--cyan); }
+.topbar-right { display: flex; align-items: center; }
 #my-stats { display: flex; gap: 14px; font-size: 13px; color: var(--text-dim); }
 #my-stats b { color: var(--text); }
 
@@ -341,6 +343,32 @@ html, body {
 @keyframes spin { to { transform: rotate(360deg); } }
 #loading-text { color: var(--text-dim); font-size: 14px; }
 
+.scandal-box {
+  background: var(--bg-elev);
+  border: 1.5px solid var(--pink);
+  border-radius: 16px;
+  padding: 28px;
+  max-width: 380px;
+  width: 90%;
+  text-align: center;
+}
+.scandal-box h3 { font-family: var(--font-display); font-size: 20px; margin: 8px 0 10px; }
+.scandal-options { display: grid; gap: 8px; }
+.scandal-option-btn {
+  background: var(--bg-elev-2);
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: left;
+}
+.scandal-option-btn:hover { border-color: var(--pink); }
+.scandal-option-btn .opt-desc { font-weight: 400; font-size: 11px; color: var(--text-dim); margin-top: 3px; }
+
 /* ===== 엔딩 ===== */
 #screen-ending { align-items: center; justify-content: center; text-align: center; }
 .ending-wrap { max-width: 720px; width: 100%; }
@@ -354,3 +382,19 @@ html, body {
 .ending-card h3 { font-family: var(--font-display); color: var(--pink); margin-bottom: 8px; font-size: 18px; }
 .ending-card .final-stats { display: flex; gap: 14px; font-size: 12px; color: var(--text-dim); margin-bottom: 10px; }
 .ending-card p { font-size: 13px; line-height: 1.7; color: var(--text); }
+
+.awards-section {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin-bottom: 24px;
+}
+.award-card {
+  background: var(--bg-elev);
+  border: 1px solid var(--pink);
+  border-radius: 12px;
+  padding: 14px;
+  text-align: center;
+}
+.award-card .award-title { font-size: 11px; color: var(--pink); font-weight: 700; margin-bottom: 6px; }
+.award-card .award-winner { font-family: var(--font-display); font-size: 15px; color: var(--text); }
